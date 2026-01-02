@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scratch Pro | Ultra IDE</title>
+    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly/javascript_compressed"></script>
+    <script src="https://unpkg.com/blockly/msg/en"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+
+        :root {
+            --bg-base: #020617;
+            --bg-surface: rgba(15, 23, 42, 0.7);
+            --bg-element: rgba(30, 41, 59, 0.8);
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --scratch-green: #10b981;
+            --scratch-red: #f43f5e;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --glass: blur(12px) saturate(180%);
+        }
+
+        body.theme-high-contrast {
+            --bg-base: #000000;
+            --bg-surface: #111111;
+            --bg-element: #222222;
+            --accent: #ffffff;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --border-color: #444444;
+        }
+
+        body.theme-classic {
+            --bg-base: #f8fafc;
+            --bg-surface: rgba(255, 255, 255, 0.8);
+            --bg-element: rgba(226, 232, 240, 0.8);
+            --accent: #4f46e5;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body { 
+            margin: 0; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            background-color: var(--bg-base); 
+            color: var(--text-primary); 
+            font-family: var(--font-main); 
+            overflow: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.1) 0px, transparent 50%);
+        }
+
+        header {
+            height: 64px;
+            background: var(--bg-surface);
+            backdrop-filter: var(--glass);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            justify-content: space-between;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            font-size: 1.25rem;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px var(--accent-glow);
+        }
+
+        #main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        #blocklyArea {
+            flex: 1;
+            position: relative;
+            background: var(--bg-surface);
+            backdrop-filter: var(--glass);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+        #blocklyDiv { position: absolute; top: 0; left: 0; bottom: 0; right: 0; }
+
+        #side-panels {
+            width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .panel-card {
+            background: var(--bg-surface);
+            backdrop-filter: var(--glass);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px -10px rgba(0,0,0,0.3);
+        }
+
+        #stage-header {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.03);
+        }
+
+        .btn-action {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+        }
+
+        .btn-action:hover { transform: translateY(-1px); filter: brightness(1.1); }
+        .btn-action:active { transform: translateY(0px); }
+
+        .btn-green { background: var(--scratch-green); color: white; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
+        .btn-red { background: var(--scratch-red); color: white; box-shadow: 0 4px 15px rgba(244, 63, 94, 0.3); }
+        .btn-ghost { background: var(--bg-element); color: var(--text-primary); border-color: var(--border-color); }
+
+        #stage-wrapper {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            background: rgba(0,0,0,0.2);
+        }
+
+        #stage {
+            width: 380px;
+            height: 285px;
+            background: #000;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .manager-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .manager-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .stage-selector {
+            width: 90px;
+            border-right: 1px solid var(--border-color);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            background: rgba(0,0,0,0.15);
+        }
+
+        .sprite-list-container {
+            flex: 1;
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            grid-auto-rows: min-content;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .sprite-thumb {
+            aspect-ratio: 1;
+            background: var(--bg-element);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .sprite-thumb:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .sprite-thumb.active {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+            box-shadow: 0 0 15px var(--accent-glow);
+            transform: scale(1.02);
+        }
+
+        .sprite-thumb span {
+            font-size: 10px;
+            margin-top: 6px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            max-width: 60px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .console-area {
+            height: 140px;
+            background: rgba(2, 6, 23, 0.8);
+            color: #10b981;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            padding: 16px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .theme-switcher {
+            display: flex;
+            background: var(--bg-element);
+            padding: 4px;
+            border-radius: 10px;
+            gap: 2px;
+            border: 1px solid var(--border-color);
+        }
+        .theme-pill {
+            padding: 6px 14px;
+            border-radius: 7px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .theme-pill.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 10px var(--accent-glow);
+        }
+
+        /* Blockly Overrides */
+        .blocklyMainBackground { stroke: none !important; fill: transparent !important; }
+        .blocklyToolboxDiv { background-color: transparent !important; border-right: 1px solid var(--border-color) !important; padding: 10px 0; }
+        .blocklyFlyoutBackground { fill: var(--bg-surface) !important; fill-opacity: 0.95 !important; }
+        .blocklyTreeLabel { font-family: var(--font-main) !important; font-weight: 600 !important; font-size: 13px !important; color: var(--text-secondary) !important; }
+        .blocklyTreeRow.blocklyTreeSelected .blocklyTreeLabel { color: var(--text-primary) !important; }
+        
+        /* HIDE TOOLBOX SCROLLBAR (Request Implementation) */
+        .blocklyToolboxDiv .blocklyScrollbarHorizontal,
+        .blocklyToolboxDiv .blocklyScrollbarVertical {
+            display: none !important;
+        }
+
+        #stage-backdrop {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background-size: cover;
+            background-position: center;
+            transition: all 0.5s ease;
+        }
+
+        .sprite-entity { 
+            position: absolute; 
+            z-index: 20; 
+            cursor: grab; 
+            transition: transform 0.1s ease-out;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+        }
+        .sprite-entity:active { cursor: grabbing; }
+        .sprite-entity.active::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-element); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+    </style>
+</head>
+<body class="theme-midnight">
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon"><i class="fas fa-bolt-lightning text-white text-sm"></i></div>
+            <span class="tracking-tight">SCRATCH <span class="text-indigo-400 font-black">PRO</span></span>
+        </div>
+        
+        <div class="flex items-center gap-8">
+            <div class="theme-switcher">
+                <div onclick="setTheme('classic')" class="theme-pill" id="pill-classic">Classic</div>
+                <div onclick="setTheme('midnight')" class="theme-pill active" id="pill-midnight">Midnight</div>
+                <div onclick="setTheme('high-contrast')" class="theme-pill" id="pill-high-contrast">Focus</div>
+            </div>
+            <button id="openModBtn" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 px-3 py-2 rounded-lg transition-all border border-indigo-500/20">
+                <i class="fas fa-code"></i>
+            </button>
+        </div>
+    </header>
+
+    <div id="main-container">
+        <div id="blocklyArea">
+            <div id="blocklyDiv"></div>
+        </div>
+
+        <div id="side-panels">
+            <div class="panel-card">
+                <div id="stage-header">
+                    <button id="runBtn" class="btn-action btn-green">
+                        <i class="fas fa-flag"></i> Run Project
+                    </button>
+                    <button id="stopBtn" class="btn-action btn-red">
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                    <div class="flex-1"></div>
+                    <button id="addSpriteBtn" class="btn-action btn-ghost">
+                        <i class="fas fa-plus"></i> New Sprite
+                    </button>
+                </div>
+
+                <div id="stage-wrapper">
+                    <div id="stage">
+                        <div id="stage-backdrop"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-card flex-1" id="sprite-manager">
+                <div class="manager-header">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
+                        <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Workspace</span>
+                    </div>
+                    <span id="active-name" class="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/10">Loading...</span>
+                </div>
+                <div class="manager-body">
+                    <div class="stage-selector" id="stage-thumb-container">
+                        <!-- Stage Thumb -->
+                    </div>
+                    <div id="sprite-list" class="sprite-list-container">
+                        <!-- Sprite Gallery -->
+                    </div>
+                </div>
+                <div id="console" class="console-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inject Mod Panel -->
+    <div id="modPanel" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[200] hidden items-center justify-center p-6">
+        <div class="bg-slate-900 rounded-3xl w-full max-w-xl border border-white/10 shadow-2xl overflow-hidden">
+            <div class="p-8 border-b border-white/5 flex justify-between items-center bg-white/2">
+                <div>
+                    <h2 class="font-extrabold text-white text-xl">JS Kernel Injection</h2>
+                    <p class="text-slate-400 text-sm">Direct runtime modification</p>
+                </div>
+                <button id="closeModBtn" class="bg-white/5 hover:bg-white/10 w-10 h-10 rounded-full text-slate-400 hover:text-white transition-all"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-8 space-y-6">
+                <textarea id="modInput" class="w-full h-64 bg-black/40 p-5 rounded-2xl border border-white/10 font-mono text-sm text-indigo-300 focus:outline-none focus:border-indigo-500/50 transition-all resize-none" placeholder="// Input runtime JS code here..."></textarea>
+                <button id="loadModBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-600/20 active:scale-95">Inject to Kernel</button>
+            </div>
+        </div>
+    </div>
+
+    <xml id="toolbox" style="display: none">
+        <category name="Events" colour="#FFBF00">
+            <block type="event_whenflagclicked"></block>
+            <block type="event_whenbroadcastreceived"><field name="MESSAGE">message1</field></block>
+            <block type="event_broadcast">
+                <value name="MESSAGE"><shadow type="text"><field name="TEXT">message1</field></shadow></value>
+            </block>
+            <block type="event_broadcastandwait">
+                <value name="MESSAGE"><shadow type="text"><field name="TEXT">message1</field></shadow></value>
+            </block>
+        </category>
+        <category name="Motion" colour="#4C97FF">
+            <block type="motion_move"><value name="STEPS"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="motion_turn"><field name="DIRECTION">RIGHT</field><value name="DEGREES"><shadow type="math_number"><field name="NUM">15</field></shadow></value></block>
+            <block type="motion_goto_xy"><value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value><value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value></block>
+            <block type="motion_glideto_xy">
+                <value name="SECS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+                <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+                <value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+            </block>
+        </category>
+        <category name="Looks" colour="#9966FF">
+            <block type="looks_say"><value name="MESSAGE"><shadow type="text"><field name="TEXT">Hello!</field></shadow></value></block>
+            <block type="looks_sayforsecs">
+                <value name="MESSAGE"><shadow type="text"><field name="TEXT">Hello!</field></shadow></value>
+                <value name="SECS"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+            </block>
+            <block type="looks_switchcostume">
+                <value name="COSTUME"><shadow type="text"><field name="TEXT">star</field></shadow></value>
+            </block>
+        </category>
+        <category name="Stage" colour="#059669">
+            <block type="stage_switchbackdrop">
+                <value name="BACKDROP"><shadow type="text"><field name="TEXT">Deep Space</field></shadow></value>
+            </block>
+            <block type="stage_nextbackdrop"></block>
+        </category>
+        <category name="Control" colour="#FFAB19">
+            <block type="control_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">1</field></shadow></value></block>
+            <block type="controls_repeat_ext"><value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="control_forever"></block>
+            <block type="controls_if"></block>
+        </category>
+        <category name="Variables" colour="#FF8C1A" custom="VARIABLE"></category>
+    </xml>
+
+    <script>
+        const state = {
+            entities: [],
+            stageEntity: null,
+            activeEntityId: null,
+            stage: { w: 380, h: 285 },
+            isRunning: false,
+            abortController: null, 
+            backdrops: {
+                'Void': '#000000',
+                'Deep Space': 'linear-gradient(45deg, #020617 0%, #1e1b4b 100%)',
+                'Neon Grid': 'linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px), #020617',
+                'Sunset': 'linear-gradient(180deg, #f97316 0%, #7c3aed 100%)',
+                'Matrix': 'linear-gradient(rgba(16, 185, 129, 0.05) 2px, transparent 2px), linear-gradient(90deg, rgba(16, 185, 129, 0.05) 2px, transparent 2px), #000'
+            },
+            currentBackdrop: 'Deep Space',
+            costumes: { 'star': 'M50 15 L58 42 L85 42 L63 58 L71 85 L50 68 L29 85 L37 58 L15 42 L42 42 Z' },
+            
+            init() {
+                this.stageEntity = {
+                    id: 'STAGE',
+                    name: 'Stage',
+                    isStage: true,
+                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>'
+                };
+                
+                this.renderStageThumb();
+                this.createSprite('Sprite1');
+                this.setActive('s_0'); 
+            },
+            
+            createSprite(name = null) {
+                const id = `s_${this.entities.length}`;
+                const entity = { 
+                    id, 
+                    name: name || `Sprite${this.entities.length + 1}`, 
+                    x: this.stage.w / 2, 
+                    y: this.stage.h / 2, 
+                    direction: 90, 
+                    costume: 'star', 
+                    dom: null,
+                    isStage: false,
+                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>' 
+                };
+                this.entities.push(entity);
+                this.renderSprite(entity);
+                this.setActive(id);
+                logToConsole(`Kernel: Created sprite <${entity.name}>`);
+                return entity;
+            },
+            
+            renderSprite(entity) {
+                const div = document.createElement('div');
+                div.className = 'sprite-entity';
+                div.style.width = '44px';
+                div.style.height = '44px';
+                div.innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full"><path d="${this.costumes[entity.costume]}" fill="var(--accent)" stroke="rgba(255,255,255,0.4)" stroke-width="3"/></svg>`;
+                div.onclick = (e) => { e.stopPropagation(); this.setActive(entity.id); };
+                
+                let isDragging = false;
+                div.onmousedown = (e) => { 
+                    isDragging = true; 
+                    this.setActive(entity.id);
+                    document.onmousemove = (ev) => {
+                        if(!isDragging) return;
+                        const rect = document.getElementById('stage').getBoundingClientRect();
+                        entity.x = Math.max(0, Math.min(this.stage.w, ev.clientX - rect.left));
+                        entity.y = Math.max(0, Math.min(this.stage.h, ev.clientY - rect.top));
+                        this.updateUI();
+                    };
+                    document.onmouseup = () => isDragging = false;
+                };
+
+                document.getElementById('stage').appendChild(div);
+                entity.dom = div;
+            },
+            
+            renderStageThumb() {
+                const container = document.getElementById('stage-thumb-container');
+                if(!container) return;
+                container.innerHTML = `
+                    <div id="thumb-STAGE" class="sprite-thumb w-full flex-1" onclick="state.setActive('STAGE')">
+                        <i class="fas fa-globe text-xl opacity-60"></i>
+                        <span>Stage</span>
+                    </div>
+                `;
+            },
+
+            setActive(id) {
+                const old = this.getActiveEntity();
+                if(old && typeof workspace !== 'undefined' && workspace) {
+                    old.xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+                }
+                
+                this.activeEntityId = id; 
+                const current = this.getActiveEntity();
+                
+                if(current && typeof workspace !== 'undefined' && workspace) {
+                    workspace.clear();
+                    try {
+                        const dom = Blockly.utils.xml.textToDom(current.xml);
+                        Blockly.Xml.domToWorkspace(dom, workspace);
+                    } catch(e) { console.error(e); }
+                }
+                this.updateUI(); 
+            },
+            
+            getActiveEntity() { 
+                if(this.activeEntityId === 'STAGE') return this.stageEntity;
+                return this.entities.find(e => e.id === this.activeEntityId); 
+            },
+            
+            updateUI() {
+                const stageDiv = document.getElementById('stage-backdrop');
+                if(stageDiv) {
+                    const val = this.backdrops[this.currentBackdrop];
+                    stageDiv.style.background = val;
+                    if(val.includes('grid') || val.includes('Matrix')) stageDiv.style.backgroundSize = '30px 30px';
+                }
+
+                this.entities.forEach(e => {
+                    if (e.dom) {
+                        e.dom.style.left = `${e.x - 22}px`; 
+                        e.dom.style.top = `${e.y - 22}px`;
+                        e.dom.style.transform = `rotate(${e.direction - 90}deg)`;
+                        e.dom.classList.toggle('active', e.id === this.activeEntityId);
+                    }
+                });
+
+                const list = document.getElementById('sprite-list');
+                if(list) {
+                    list.innerHTML = '';
+                    this.entities.forEach(e => {
+                        const thumb = document.createElement('div');
+                        thumb.className = `sprite-thumb ${e.id === this.activeEntityId ? 'active' : ''}`;
+                        thumb.innerHTML = `<svg class="w-8 h-8" viewBox="0 0 100 100"><path d="${this.costumes[e.costume]}" fill="var(--accent)"/></svg><span title="${e.name}">${e.name}</span>`;
+                        thumb.onclick = () => this.setActive(e.id);
+                        list.appendChild(thumb);
+                    });
+                }
+
+                const stageThumb = document.getElementById('thumb-STAGE');
+                if(stageThumb) stageThumb.className = `sprite-thumb w-full flex-1 ${this.activeEntityId === 'STAGE' ? 'active' : ''}`;
+                
+                const nameLabel = document.getElementById('active-name');
+                if(nameLabel) nameLabel.innerText = this.getActiveEntity()?.name || 'Null';
+            },
+
+            async broadcast(msg) {
+                logToConsole(`Broadcast message: "${msg}"`);
+                const targets = [...this.entities, this.stageEntity];
+                targets.forEach(entity => {
+                    const tempWs = new Blockly.Workspace();
+                    try {
+                        Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(entity.xml), tempWs);
+                        const blocks = tempWs.getBlocksByType('event_whenbroadcastreceived');
+                        blocks.forEach(block => {
+                            if (block.getFieldValue('MESSAGE') === msg) {
+                                const next = block.getNextBlock();
+                                if(next) {
+                                    const code = gen.blockToCode(next);
+                                    const fn = new Function('state', 'self', 'moveSprite', 'sleep', 'logToConsole', `(async()=>{ ${code} })()`);
+                                    fn(this, entity, moveSprite, sleep, logToConsole);
+                                }
+                            }
+                        });
+                    } finally { tempWs.dispose(); }
+                });
+            }
+        };
+
+        function setTheme(theme) {
+            document.body.className = `theme-${theme}`;
+            document.querySelectorAll('.theme-pill').forEach(p => p.classList.remove('active'));
+            document.getElementById(`pill-${theme}`)?.classList.add('active');
+            logToConsole(`System: Active theme set to <${theme}>`);
+        }
+
+        Blockly.Blocks['event_whenflagclicked'] = { init: function() { this.appendDummyInput().appendField("when").appendField(new Blockly.FieldImage("https://scratch.mit.edu/static/assets/40432658145e7f1e63a129d5926ec25d.svg", 16, 16, "green flag")).appendField("clicked"); this.setNextStatement(true); this.setColour("#FFBF00"); this.hat='cap'; } };
+        Blockly.Blocks['event_whenbroadcastreceived'] = { init: function() { this.appendDummyInput().appendField("when I receive").appendField(new Blockly.FieldTextInput("message1"), "MESSAGE"); this.setNextStatement(true); this.setColour("#FFBF00"); this.hat='cap'; } };
+        Blockly.Blocks['event_broadcast'] = { init: function() { this.appendValueInput("MESSAGE").setCheck("String").appendField("broadcast"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFBF00"); } };
+        Blockly.Blocks['event_broadcastandwait'] = { init: function() { this.appendValueInput("MESSAGE").setCheck("String").appendField("broadcast").appendField("and wait"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFBF00"); } };
+        
+        Blockly.Blocks['motion_move'] = { init: function() { this.appendValueInput("STEPS").setCheck("Number").appendField("move"); this.appendDummyInput().appendField("steps"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
+        Blockly.Blocks['motion_turn'] = { init: function() { 
+            const dir = this.appendDummyInput();
+            if(this.getFieldValue('DIRECTION') === 'RIGHT') dir.appendField("turn ↻"); else dir.appendField("turn ↺");
+            this.appendValueInput("DEGREES").setCheck("Number");
+            this.appendDummyInput().appendField("degrees");
+            this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); 
+        }, mutationToDom: function() { const container = document.createElement('mutation'); container.setAttribute('direction', this.getFieldValue('DIRECTION')); return container; }, domToMutation: function(xmlElement) { this.setFieldValue(xmlElement.getAttribute('direction'), 'DIRECTION'); } };
+        Blockly.Blocks['motion_goto_xy'] = { init: function() { this.appendDummyInput().appendField("go to x:"); this.appendValueInput("X").setCheck("Number"); this.appendDummyInput().appendField("y:"); this.appendValueInput("Y").setCheck("Number"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
+        Blockly.Blocks['motion_glideto_xy'] = { init: function() { this.appendDummyInput().appendField("glide"); this.appendValueInput("SECS").setCheck("Number"); this.appendDummyInput().appendField("secs to x:"); this.appendValueInput("X").setCheck("Number"); this.appendDummyInput().appendField("y:"); this.appendValueInput("Y").setCheck("Number"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
+
+        Blockly.Blocks['looks_say'] = { init: function() { this.appendDummyInput().appendField("say"); this.appendValueInput("MESSAGE").setCheck(null); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
+        Blockly.Blocks['looks_sayforsecs'] = { init: function() { this.appendDummyInput().appendField("say"); this.appendValueInput("MESSAGE").setCheck(null); this.appendDummyInput().appendField("for"); this.appendValueInput("SECS").setCheck("Number"); this.appendDummyInput().appendField("seconds"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
+        Blockly.Blocks['looks_switchcostume'] = { init: function() { this.appendDummyInput().appendField("switch costume to"); this.appendValueInput("COSTUME").setCheck("String"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
+
+        Blockly.Blocks['control_wait'] = { init: function() { this.appendDummyInput().appendField("wait"); this.appendValueInput("DURATION").setCheck("Number"); this.appendDummyInput().appendField("seconds"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFAB19"); } };
+        Blockly.Blocks['control_forever'] = { init: function() { this.appendDummyInput().appendField("forever"); this.appendStatementInput("DO"); this.setPreviousStatement(true); this.setNextStatement(false); this.setColour("#FFAB19"); } };
+
+        Blockly.Blocks['stage_switchbackdrop'] = { init: function() { this.appendDummyInput().appendField("switch backdrop to"); this.appendValueInput("BACKDROP").setCheck("String"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#059669"); }};
+        Blockly.Blocks['stage_nextbackdrop'] = { init: function() { this.appendDummyInput().appendField("next backdrop"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#059669"); }};
+
+        const gen = javascript.javascriptGenerator;
+        gen.forBlock['event_whenflagclicked'] = () => "";
+        gen.forBlock['event_whenbroadcastreceived'] = () => "";
+        gen.forBlock['event_broadcast'] = (b) => `await state.broadcast(${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)});\n`;
+        gen.forBlock['event_broadcastandwait'] = (b) => `await state.broadcast(${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)});\n`;
+        gen.forBlock['motion_move'] = (b) => `if(!self.isStage) await moveSprite(self, ${gen.valueToCode(b,'STEPS',javascript.Order.ATOMIC)||0});\n`;
+        gen.forBlock['motion_turn'] = (b) => {
+            const deg = gen.valueToCode(b,'DEGREES',javascript.Order.ATOMIC)||0;
+            const dir = b.getFieldValue('DIRECTION') === 'RIGHT' ? deg : `-${deg}`;
+            return `if(!self.isStage) { self.direction += ${dir}; state.updateUI(); await sleep(30); }\n`;
+        };
+        gen.forBlock['motion_goto_xy'] = (b) => `if(!self.isStage) { self.x = ${gen.valueToCode(b,'X',javascript.Order.ATOMIC)} + state.stage.w/2; self.y = state.stage.h/2 - ${gen.valueToCode(b,'Y',javascript.Order.ATOMIC)}; state.updateUI(); await sleep(30); }\n`;
+        gen.forBlock['motion_glideto_xy'] = (b) => `if(!self.isStage) { self.x = ${gen.valueToCode(b,'X',javascript.Order.ATOMIC)} + state.stage.w/2; self.y = state.stage.h/2 - ${gen.valueToCode(b,'Y',javascript.Order.ATOMIC)}; state.updateUI(); await sleep(${gen.valueToCode(b,'SECS',javascript.Order.ATOMIC)*1000}); }\n`;
+        gen.forBlock['control_wait'] = (b) => `await sleep(${gen.valueToCode(b,'DURATION',javascript.Order.ATOMIC)*1000});\n`;
+        gen.forBlock['control_forever'] = (b) => `while(true) {\n${gen.statementToCode(b,'DO')} await sleep(10);\n}\n`;
+        gen.forBlock['looks_say'] = (b) => `logToConsole("[" + self.name + "] " + ${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)}); await sleep(100);\n`;
+        gen.forBlock['looks_sayforsecs'] = (b) => `logToConsole("[" + self.name + "] " + ${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)}); await sleep(${gen.valueToCode(b,'SECS',javascript.Order.ATOMIC)*1000});\n`;
+        gen.forBlock['looks_switchcostume'] = () => `state.updateUI();\n`;
+        gen.forBlock['stage_switchbackdrop'] = (b) => {
+            const val = gen.valueToCode(b,'BACKDROP',javascript.Order.ATOMIC);
+            return `if(state.backdrops[${val}]) { state.currentBackdrop = ${val}; state.updateUI(); await sleep(30); }\n`;
+        };
+        gen.forBlock['stage_nextbackdrop'] = () => {
+            return `const keys = Object.keys(state.backdrops); let idx = keys.indexOf(state.currentBackdrop); state.currentBackdrop = keys[(idx+1)%keys.length]; state.updateUI(); await sleep(30);\n`;
+        };
+        gen.forBlock['controls_repeat_ext'] = (block) => {
+            const repeats = gen.valueToCode(block, 'TIMES', javascript.Order.ASSIGNMENT) || '0';
+            const branch = gen.statementToCode(block, 'DO');
+            return `for (let i = 0; i < ${repeats}; i++) {\n${branch}  await sleep(10);\n}\n`;
+        };
+        gen.forBlock['controls_if'] = (block) => {
+            const cond = gen.valueToCode(block, 'IF0', javascript.Order.NONE) || 'false';
+            const branch = gen.statementToCode(block, 'DO0');
+            return `if (${cond}) {\n${branch}}\n`;
+        };
+
+        const workspace = Blockly.inject('blocklyDiv', {
+            toolbox: document.getElementById('toolbox'),
+            theme: Blockly.Themes.Modern,
+            renderer: 'zelos',
+            zoom: { controls: true, startScale: 0.8 },
+            grid: { spacing: 25, length: 2, colour: 'rgba(255,255,255,0.05)', snap: true }
+        });
+
+        const logToConsole = (msg) => {
+            const c = document.getElementById('console');
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            c.innerHTML += `<div class="mb-1 border-l-2 border-indigo-500/30 pl-2"><span class="text-indigo-500/60 font-mono text-[10px]">${time}</span> <span class="text-slate-200">${msg}</span></div>`;
+            c.scrollTop = c.scrollHeight;
+        };
+
+        const sleep = (ms) => new Promise((resolve, reject) => {
+            const timeout = setTimeout(resolve, ms);
+            state.abortController?.signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                reject(new Error('ABORTED'));
+            });
+        });
+
+        async function moveSprite(entity, steps) { 
+            const r = (entity.direction - 90) * (Math.PI / 180); 
+            entity.x += Math.cos(r) * steps; entity.y += Math.sin(r) * steps; 
+            state.updateUI(); await sleep(30);
+        }
+
+        document.getElementById('runBtn').onclick = async () => {
+            if (state.abortController) state.abortController.abort();
+            state.abortController = new AbortController();
+
+            const current = state.getActiveEntity();
+            if(current) current.xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+            
+            logToConsole("Project: Running scripts...");
+            [...state.entities, state.stageEntity].forEach(entity => {
+                const tempWs = new Blockly.Workspace();
+                try {
+                    Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(entity.xml), tempWs);
+                    tempWs.getBlocksByType('event_whenflagclicked').forEach(flag => {
+                        const next = flag.getNextBlock();
+                        if(next) {
+                            const code = gen.blockToCode(next);
+                            const fn = new Function('state', 'self', 'moveSprite', 'sleep', 'logToConsole', `(async()=>{ 
+                                try { 
+                                    ${code} 
+                                } catch(e){ 
+                                    if(e.message !== 'ABORTED') logToConsole("Runtime Error: " + e.message); 
+                                } 
+                            })()`);
+                            fn(state, entity, moveSprite, sleep, logToConsole);
+                        }
+                    });
+                } finally { tempWs.dispose(); }
+            });
+        };
+
+        document.getElementById('stopBtn').onclick = () => {
+            if (state.abortController) {
+                state.abortController.abort();
+                state.abortController = null;
+                logToConsole("Project: Process killed.");
+            }
+            state.entities.forEach(e => {
+                e.x = state.stage.w / 2;
+                e.y = state.stage.h / 2;
+                e.direction = 90;
+            });
+            state.updateUI();
+        };
+
+        document.getElementById('addSpriteBtn').onclick = () => {
+            const n = prompt("Sprite Name:");
+            if(n) state.createSprite(n.replace(/\s+/g, '_'));
+        };
+        
+        document.getElementById('openModBtn').onclick = () => document.getElementById('modPanel').style.display = 'flex';
+        document.getElementById('closeModBtn').onclick = () => document.getElementById('modPanel').style.display = 'none';
+        document.getElementById('loadModBtn').onclick = () => {
+            try {
+                eval(document.getElementById('modInput').value);
+                logToConsole("Kernel: JS patch injected.");
+            } catch(e) { logToConsole("Kernel Exception: " + e.message); }
+        };
+
+        window.onload = () => { state.init(); Blockly.svgResize(workspace); };
+        window.addEventListener('resize', () => Blockly.svgResize(workspace));
+    </script>
+</body>
+</html>
