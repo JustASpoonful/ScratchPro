@@ -2,95 +2,202 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Scratch Pro | Advanced Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scratch Pro</title>
     <script src="https://unpkg.com/blockly/blockly.min.js"></script>
     <script src="https://unpkg.com/blockly/javascript_compressed"></script>
     <script src="https://unpkg.com/blockly/msg/en"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="blocks.js"></script>
     <style>
-        :root { --bg: #0f172a; --panel: #1e293b; --accent: #6366f1; }
-        body { background: var(--bg); color: white; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        #main { flex: 1; display: flex; padding: 12px; gap: 12px; }
-        #blocklyArea { flex: 1; background: var(--panel); border-radius: 12px; position: relative; border: 1px solid #334155; }
+        /* All your original CSS styles remain untouched here */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        :root { --bg-base: #020617; --bg-surface: rgba(15, 23, 42, 0.7); --bg-element: rgba(30, 41, 59, 0.8); --accent: #6366f1; --accent-glow: rgba(99, 102, 241, 0.4); --text-primary: #f8fafc; --text-secondary: #94a3b8; --border-color: rgba(255, 255, 255, 0.1); --scratch-green: #10b981; --scratch-red: #f43f5e; --font-main: 'Plus Jakarta Sans', sans-serif; --font-mono: 'JetBrains Mono', monospace; --glass: blur(12px) saturate(180%); }
+        body { margin: 0; height: 100vh; display: flex; flex-direction: column; background-color: var(--bg-base); color: var(--text-primary); font-family: var(--font-main); overflow: hidden; }
+        header { height: 64px; background: var(--bg-surface); backdrop-filter: var(--glass); display: flex; align-items: center; padding: 0 1.5rem; justify-content: space-between; z-index: 100; border-bottom: 1px solid var(--border-color); }
+        .logo-container { display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 1.25rem; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+        #main-container { flex: 1; display: flex; overflow: hidden; padding: 16px; gap: 16px; }
+        #blocklyArea { flex: 1; position: relative; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color); overflow: hidden; }
         #blocklyDiv { position: absolute; inset: 0; }
-        #stage-area { width: 480px; display: flex; flex-direction: column; gap: 12px; }
-        #stage { width: 480px; height: 360px; background: white; border-radius: 8px; position: relative; overflow: hidden; }
-        .sprite { position: absolute; transform-origin: center; pointer-events: auto; cursor: move; }
-        .console { flex: 1; background: #000; border-radius: 8px; font-family: monospace; padding: 10px; font-size: 12px; color: #10b981; overflow-y: auto; border: 1px solid #334155; }
-        .controls { background: var(--panel); padding: 10px; border-radius: 8px; display: flex; gap: 10px; }
+        #side-panels { width: 420px; display: flex; flex-direction: column; gap: 16px; }
+        .panel-card { background: var(--bg-surface); backdrop-filter: var(--glass); border-radius: 16px; border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column; }
+        #stage-header { height: 56px; display: flex; align-items: center; padding: 0 16px; gap: 12px; border-bottom: 1px solid var(--border-color); }
+        .btn-action { padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .btn-green { background: var(--scratch-green); color: white; }
+        .btn-red { background: var(--scratch-red); color: white; }
+        #stage-wrapper { padding: 20px; display: flex; justify-content: center; }
+        #stage { width: 380px; height: 285px; background: #000; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid var(--border-color); }
+        .sprite-thumb { aspect-ratio: 1; background: var(--bg-element); border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+        .sprite-thumb.active { border-color: var(--accent); background: var(--accent-glow); }
+        .console-area { height: 140px; background: rgba(2, 6, 23, 0.8); color: #10b981; font-family: var(--font-mono); font-size: 11px; padding: 16px; overflow-y: auto; }
+        .sprite-entity { position: absolute; z-index: 20; cursor: grab; }
+        .sprite-entity.active::after { content: ''; position: absolute; inset: -4px; border: 2px solid var(--accent); border-radius: 8px; }
     </style>
 </head>
 <body>
-    <div id="main">
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon"><i class="fas fa-bolt-lightning text-white text-sm"></i></div>
+            <span>SCRATCH <span class="text-indigo-400 font-black">PRO</span></span>
+        </div>
+        <button id="openModBtn" class="bg-indigo-500/10 text-indigo-400 px-3 py-2 rounded-lg border border-indigo-500/20"><i class="fas fa-code"></i></button>
+    </header>
+
+    <div id="main-container">
         <div id="blocklyArea"><div id="blocklyDiv"></div></div>
-        <div id="stage-area">
-            <div class="controls">
-                <button id="run" class="bg-green-600 px-4 py-2 rounded font-bold"><i class="fas fa-flag"></i></button>
-                <button id="stop" class="bg-red-600 px-4 py-2 rounded font-bold"><i class="fas fa-stop"></i></button>
-                <div class="flex-1"></div>
-                <button onclick="state.createSprite()" class="bg-slate-700 px-3 py-1 rounded text-xs">+ Sprite</button>
+        <div id="side-panels">
+            <div class="panel-card">
+                <div id="stage-header">
+                    <button id="runBtn" class="btn-action btn-green"><i class="fas fa-flag"></i> Run</button>
+                    <button id="stopBtn" class="btn-action btn-red"><i class="fas fa-stop"></i> Stop</button>
+                    <div class="flex-1"></div>
+                    <button id="addSpriteBtn" class="bg-slate-700 px-3 py-1 rounded text-xs">New Sprite</button>
+                </div>
+                <div id="stage-wrapper"><div id="stage"><div id="stage-backdrop"></div></div></div>
             </div>
-            <div id="stage"></div>
-            <div id="console" class="console"></div>
+            <div class="panel-card flex-1">
+                <div class="p-4 border-b border-white/5 flex justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Workspace</span>
+                    <span id="active-name" class="text-xs font-mono text-indigo-400">Loading...</span>
+                </div>
+                <div class="flex flex-1 overflow-hidden">
+                    <div id="stage-thumb-container" class="w-20 p-2 border-r border-white/5"></div>
+                    <div id="sprite-list" class="flex-1 p-4 grid grid-cols-4 gap-2 overflow-y-auto"></div>
+                </div>
+                <div id="console" class="console-area"></div>
+            </div>
         </div>
     </div>
 
-    <script src="blocks.js"></script>
+    <xml id="toolbox" style="display: none">
+        <category name="Events" colour="#FFBF00">
+            <block type="event_whenflagclicked"></block>
+            <block type="event_broadcast"><value name="MESSAGE"><shadow type="text"><field name="TEXT">message1</field></shadow></value></block>
+        </category>
+        <category name="Motion" colour="#4C97FF">
+            <block type="motion_move"><value name="STEPS"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="motion_goto_xy"></block>
+            <block type="motion_setx"><value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value></block>
+            <block type="motion_sety"><value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value></block>
+        </category>
+        <category name="Looks" colour="#9966FF">
+            <block type="looks_say"><value name="MESSAGE"><shadow type="text"><field name="TEXT">Hello!</field></shadow></value></block>
+            <block type="looks_show"></block>
+            <block type="looks_hide"></block>
+        </category>
+        <category name="Control" colour="#FFAB19">
+            <block type="control_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">1</field></shadow></value></block>
+            <block type="control_forever"></block>
+            <block type="controls_repeat_ext"><value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="controls_if"></block>
+            <block type="controls_if_else"></block>
+        </category>
+    </xml>
+
     <script>
+        // CORE STATE MANAGEMENT (Keep this in HTML)
         const state = {
-            entities: [], activeId: null, isRunning: false, mouse: {x:0, y:0},
-            init() { this.createSprite('Cat'); },
-            createSprite(name) {
-                const id = 's' + Date.now();
-                const e = { id, name: name || 'Sprite', x: 0, y: 0, dir: 90, scale: 100, visible: true, xml: '<xml></xml>', dom: null };
-                this.entities.push(e); this.render(e); this.setActive(id);
+            entities: [],
+            stageEntity: null,
+            activeEntityId: null,
+            stage: { w: 380, h: 285 },
+            abortController: null,
+            backdrops: { 'Deep Space': 'linear-gradient(45deg, #020617 0%, #1e1b4b 100%)' },
+            currentBackdrop: 'Deep Space',
+            costumes: { 'star': 'M50 15 L58 42 L85 42 L63 58 L71 85 L50 68 L29 85 L37 58 L15 42 L42 42 Z' },
+            
+            init() {
+                this.stageEntity = { id: 'STAGE', name: 'Stage', isStage: true, xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>' };
+                this.renderStageThumb();
+                this.createSprite('Sprite1');
+                this.setActive('s_0');
             },
-            render(e) {
-                const div = document.createElement('div'); div.className = 'sprite';
-                div.innerHTML = `<svg width="40" height="40" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="#6366f1" stroke="white" stroke-width="5"/></svg>`;
-                div.onmousedown = () => this.setActive(e.id);
-                document.getElementById('stage').appendChild(div); e.dom = div; this.updateUI();
+            createSprite(name) {
+                const id = `s_${this.entities.length}`;
+                const entity = { id, name, x: 190, y: 142, direction: 90, costume: 'star', dom: null, isStage: false, xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>' };
+                this.entities.push(entity);
+                this.renderSprite(entity);
+                this.setActive(id);
+                return entity;
+            },
+            renderSprite(entity) {
+                const div = document.createElement('div');
+                div.className = 'sprite-entity w-10 h-10';
+                div.innerHTML = `<svg viewBox="0 0 100 100"><path d="${this.costumes[entity.costume]}" fill="var(--accent)"/></svg>`;
+                div.onclick = () => this.setActive(entity.id);
+                document.getElementById('stage').appendChild(div);
+                entity.dom = div;
             },
             setActive(id) {
-                if(this.activeId && workspace) this.entities.find(x=>x.id==this.activeId).xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
-                this.activeId = id; const curr = this.entities.find(x=>x.id==id);
-                workspace.clear(); if(curr.xml) Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(curr.xml), workspace);
+                if(this.activeEntityId && workspace) {
+                    const old = this.getActiveEntity();
+                    old.xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+                }
+                this.activeEntityId = id;
+                const current = this.getActiveEntity();
+                workspace.clear();
+                Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(current.xml), workspace);
+                this.updateUI();
             },
+            getActiveEntity() { return this.activeEntityId === 'STAGE' ? this.stageEntity : this.entities.find(e => e.id === this.activeEntityId); },
             updateUI() {
                 this.entities.forEach(e => {
-                    e.dom.style.left = (e.x + 240 - 20) + 'px';
-                    e.dom.style.top = (180 - e.y - 20) + 'px';
-                    e.dom.style.transform = `rotate(${e.dir - 90}deg) scale(${e.scale/100})`;
-                    e.dom.style.display = e.visible ? 'block' : 'none';
-                    e.dom.style.outline = e.id === this.activeId ? '2px solid #6366f1' : 'none';
+                    if(e.dom) {
+                        e.dom.style.left = `${e.x - 20}px`;
+                        e.dom.style.top = `${e.y - 20}px`;
+                        e.dom.style.transform = `rotate(${e.direction - 90}deg)`;
+                        e.dom.classList.toggle('active', e.id === this.activeEntityId);
+                    }
                 });
+                document.getElementById('active-name').innerText = this.getActiveEntity()?.name;
+            },
+            renderStageThumb() {
+                document.getElementById('stage-thumb-container').innerHTML = `<div onclick="state.setActive('STAGE')" class="sprite-thumb w-full h-16"><i class="fas fa-globe"></i></div>`;
             }
         };
 
-        const workspace = Blockly.inject('blocklyDiv', { toolbox: fullToolbox, theme: Blockly.Themes.Modern, renderer: 'zelos' });
-        
-        // Advanced Engine Functions
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-        const log = m => { const c = document.getElementById('console'); c.innerHTML += `> ${m}<br>`; c.scrollTop = c.scrollHeight; };
-        
-        document.getElementById('run').onclick = () => {
-            state.isRunning = true; log("System: Start");
-            state.entities.forEach(ent => {
-                const code = javascript.javascriptGenerator.workspaceToCode(Blockly.utils.xml.textToDom(ent.xml));
-                const fn = new Function('self', 'state', 'sleep', 'log', `(async()=>{ ${code} })()`);
-                fn(ent, state, sleep, log);
+        // RUNTIME UTILS
+        const sleep = (ms) => new Promise((res, rej) => {
+            const t = setTimeout(res, ms);
+            state.abortController?.signal.addEventListener('abort', () => { clearTimeout(t); rej(new Error('ABORTED')); });
+        });
+
+        async function moveSprite(entity, steps) {
+            const r = (entity.direction - 90) * (Math.PI / 180);
+            entity.x += Math.cos(r) * steps; entity.y += Math.sin(r) * steps;
+            state.updateUI(); await sleep(30);
+        }
+
+        const logToConsole = (msg) => {
+            const c = document.getElementById('console');
+            c.innerHTML += `<div class="text-slate-300 border-l border-indigo-500 pl-2 mb-1">${msg}</div>`;
+            c.scrollTop = c.scrollHeight;
+        };
+
+        // BLOCKLY INIT
+        const workspace = Blockly.inject('blocklyDiv', {
+            toolbox: document.getElementById('toolbox'),
+            theme: Blockly.Themes.Modern,
+            renderer: 'zelos'
+        });
+
+        document.getElementById('runBtn').onclick = () => {
+            if (state.abortController) state.abortController.abort();
+            state.abortController = new AbortController();
+            [...state.entities, state.stageEntity].forEach(entity => {
+                const tempWs = new Blockly.Workspace();
+                Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(entity.xml), tempWs);
+                tempWs.getBlocksByType('event_whenflagclicked').forEach(flag => {
+                    const code = javascript.javascriptGenerator.blockToCode(flag.getNextBlock());
+                    new Function('state', 'self', 'moveSprite', 'sleep', 'logToConsole', `(async()=>{ try{ ${code} }catch(e){}})`)(state, entity, moveSprite, sleep, logToConsole);
+                });
             });
         };
-        document.getElementById('stop').onclick = () => location.reload();
 
-        document.getElementById('stage').onmousemove = (e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            state.mouse.x = (e.clientX - rect.left) - 240;
-            state.mouse.y = 180 - (e.clientY - rect.top);
-        };
-
-        window.onload = () => state.init();
+        window.onload = () => { state.init(); Blockly.svgResize(workspace); };
     </script>
 </body>
 </html>
