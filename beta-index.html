@@ -2,105 +2,180 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modular Scratch Editor</title>
-    <style>
-        body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; background: #f0f0f2; }
-        
-        /* Sidebar/Toolbox */
-        #toolbox { 
-            width: 250px; background: #fff; border-right: 1px solid #ddd; 
-            display: flex; flex-direction: column; padding: 10px; overflow-y: auto;
-        }
-        .category-title { font-weight: bold; margin: 15px 0 5px; font-size: 0.9em; color: #555; }
-        
-        /* Workspace */
-        #workspace { flex-grow: 1; position: relative; padding: 20px; overflow: auto; }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scratch Pro | Core</title>
+    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly/javascript_compressed"></script>
+    <script src="https://unpkg.com/blockly/msg/en"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="editor.js" defer></script>
 
-        /* Block Styling */
-        .block {
-            padding: 10px 15px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            color: white;
-            cursor: grab;
-            font-size: 13px;
-            font-weight: 500;
-            user-select: none;
-            display: inline-block;
-            white-space: nowrap;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+
+        :root {
+            --bg-base: #020617;
+            --bg-surface: rgba(15, 23, 42, 0.7);
+            --bg-element: rgba(30, 41, 59, 0.8);
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --scratch-green: #10b981;
+            --scratch-red: #f43f5e;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --glass: blur(12px) saturate(180%);
         }
-        .block:active { cursor: grabbing; }
-        
-        .workspace-block { position: absolute; z-index: 10; }
+
+        body.theme-high-contrast {
+            --bg-base: #000000; --bg-surface: #111111; --bg-element: #222222;
+            --accent: #ffffff; --text-primary: #ffffff; --text-secondary: #aaaaaa;
+            --border-color: #444444;
+        }
+
+        body.theme-classic {
+            --bg-base: #f8fafc; --bg-surface: rgba(255, 255, 255, 0.8); --bg-element: rgba(226, 232, 240, 0.8);
+            --accent: #4f46e5; --text-primary: #0f172a; --text-secondary: #64748b;
+            --border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body { 
+            margin: 0; height: 100vh; display: flex; flex-direction: column; 
+            background-color: var(--bg-base); color: var(--text-primary); 
+            font-family: var(--font-main); overflow: hidden;
+            background-image: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                              radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.1) 0px, transparent 50%);
+        }
+
+        header {
+            height: 64px; background: var(--bg-surface); backdrop-filter: var(--glass);
+            display: flex; align-items: center; padding: 0 1.5rem; justify-content: space-between;
+            z-index: 100; border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo-container { display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 1.25rem; }
+        .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px var(--accent-glow); }
+
+        #main-container { flex: 1; display: flex; overflow: hidden; padding: 16px; gap: 16px; }
+        #blocklyArea { flex: 1; position: relative; background: var(--bg-surface); backdrop-filter: var(--glass); border-radius: 16px; border: 1px solid var(--border-color); overflow: hidden; }
+        #blocklyDiv { position: absolute; top: 0; left: 0; bottom: 0; right: 0; }
+
+        #side-panels { width: 420px; display: flex; flex-direction: column; gap: 16px; }
+        .panel-card { background: var(--bg-surface); backdrop-filter: var(--glass); border-radius: 16px; border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column; }
+
+        #stage-header { height: 56px; display: flex; align-items: center; padding: 0 16px; gap: 12px; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.03); }
+        .btn-action { padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; transition: all 0.2s; border: 1px solid transparent; }
+        .btn-green { background: var(--scratch-green); color: white; }
+        .btn-red { background: var(--scratch-red); color: white; }
+        .btn-ghost { background: var(--bg-element); color: var(--text-primary); border-color: var(--border-color); }
+
+        #stage-wrapper { padding: 20px; display: flex; justify-content: center; background: rgba(0,0,0,0.2); }
+        #stage { width: 380px; height: 285px; background: #000; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid var(--border-color); }
+        #stage-backdrop { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center; }
+
+        .manager-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .manager-body { display: flex; flex: 1; overflow: hidden; }
+        .stage-selector { width: 90px; border-right: 1px solid var(--border-color); padding: 12px; display: flex; flex-direction: column; gap: 10px; align-items: center; background: rgba(0,0,0,0.15); }
+        .sprite-list-container { flex: 1; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px; overflow-y: auto; }
+
+        .sprite-thumb { aspect-ratio: 1; background: var(--bg-element); border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+        .sprite-thumb.active { border-color: var(--accent); background: var(--accent-glow); }
+
+        .console-area { height: 140px; background: rgba(2, 6, 23, 0.8); color: #10b981; font-family: var(--font-mono); font-size: 11px; padding: 16px; overflow-y: auto; border-top: 1px solid var(--border-color); }
+
+        .sprite-entity { position: absolute; z-index: 20; cursor: grab; }
+        .sprite-entity.active::after { content: ''; position: absolute; inset: -4px; border: 2px solid var(--accent); border-radius: 8px; }
+
+        .theme-switcher { display: flex; background: var(--bg-element); padding: 4px; border-radius: 10px; gap: 2px; }
+        .theme-pill { padding: 6px 14px; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--text-secondary); }
+        .theme-pill.active { background: var(--accent); color: white; }
+
+        .blocklyToolboxDiv { background-color: transparent !important; border-right: 1px solid var(--border-color) !important; }
+        .blocklyFlyoutBackground { fill: var(--bg-surface) !important; fill-opacity: 0.95 !important; }
     </style>
 </head>
-<body>
+<body class="theme-midnight">
 
-    <div id="toolbox">
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon"><i class="fas fa-bolt-lightning text-white text-sm"></i></div>
+            <span>SCRATCH <span class="text-indigo-400 font-black">PRO</span></span>
         </div>
-
-    <div id="workspace" ondrop="drop(event)" ondragover="allowDrop(event)">
+        <div class="flex items-center gap-8">
+            <div class="theme-switcher">
+                <div onclick="setTheme('classic')" class="theme-pill" id="pill-classic">Classic</div>
+                <div onclick="setTheme('midnight')" class="theme-pill active" id="pill-midnight">Midnight</div>
+                <div onclick="setTheme('high-contrast')" class="theme-pill" id="pill-high-contrast">Focus</div>
+            </div>
+            <button id="openModBtn" class="bg-indigo-500/10 text-indigo-400 px-3 py-2 rounded-lg border border-indigo-500/20"><i class="fas fa-code"></i></button>
         </div>
+    </header>
 
-    <script src="blocks.js"></script>
+    <div id="main-container">
+        <div id="blocklyArea"><div id="blocklyDiv"></div></div>
+        <div id="side-panels">
+            <div class="panel-card">
+                <div id="stage-header">
+                    <button id="runBtn" class="btn-action btn-green"><i class="fas fa-flag"></i> Run</button>
+                    <button id="stopBtn" class="btn-action btn-red"><i class="fas fa-stop"></i> Stop</button>
+                    <div class="flex-1"></div>
+                    <button id="addSpriteBtn" class="btn-action btn-ghost"><i class="fas fa-plus"></i> New Sprite</button>
+                </div>
+                <div id="stage-wrapper"><div id="stage"><div id="stage-backdrop"></div></div></div>
+            </div>
+            <div class="panel-card flex-1">
+                <div class="manager-header">
+                    <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Workspace</span>
+                    <span id="active-name" class="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">...</span>
+                </div>
+                <div class="manager-body">
+                    <div class="stage-selector" id="stage-thumb-container"></div>
+                    <div id="sprite-list" class="sprite-list-container"></div>
+                </div>
+                <div id="console" class="console-area"></div>
+            </div>
+        </div>
+    </div>
 
-    <script>
-        // CORE ENGINE LOGIC - DO NOT CHANGE UI
-        function allowDrop(ev) { ev.preventDefault(); }
+    <div id="modPanel" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[200] hidden items-center justify-center p-6">
+        <div class="bg-slate-900 rounded-3xl w-full max-w-xl border border-white/10 overflow-hidden">
+            <div class="p-8 border-b border-white/5 flex justify-between items-center">
+                <h2 class="font-extrabold text-white text-xl">JS Kernel Injection</h2>
+                <button id="closeModBtn" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-8 space-y-6">
+                <textarea id="modInput" class="w-full h-64 bg-black/40 p-5 rounded-2xl border border-white/10 font-mono text-sm text-indigo-300 focus:outline-none focus:border-indigo-500/50" placeholder="// Input runtime JS code here..."></textarea>
+                <button id="loadModBtn" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold">Inject to Kernel</button>
+            </div>
+        </div>
+    </div>
 
-        function drag(ev) {
-            ev.dataTransfer.setData("blockType", ev.target.dataset.type);
-            ev.dataTransfer.setData("blockColor", ev.target.style.backgroundColor);
-            ev.dataTransfer.setData("blockLabel", ev.target.innerText);
-        }
-
-        function drop(ev) {
-            ev.preventDefault();
-            const type = ev.dataTransfer.getData("blockType");
-            const color = ev.dataTransfer.getData("blockColor");
-            const label = ev.dataTransfer.getData("blockLabel");
-
-            const newBlock = document.createElement("div");
-            newBlock.className = "block workspace-block";
-            newBlock.style.backgroundColor = color;
-            newBlock.innerText = label;
-            
-            // Positioning logic
-            const rect = document.getElementById("workspace").getBoundingClientRect();
-            newBlock.style.left = (ev.clientX - rect.left - 20) + "px";
-            newBlock.style.top = (ev.clientY - rect.top - 10) + "px";
-
-            document.getElementById("workspace").appendChild(newBlock);
-        }
-
-        // Initialize Toolbox from the JS Data
-        function initEditor() {
-            const toolbox = document.getElementById('toolbox');
-            
-            // Loop through categories defined in blocks.js
-            BLOCK_DATABASE.categories.forEach(cat => {
-                const title = document.createElement('div');
-                title.className = 'category-title';
-                title.innerText = cat.name.toUpperCase();
-                toolbox.appendChild(title);
-
-                cat.blocks.forEach(block => {
-                    const b = document.createElement('div');
-                    b.className = 'block';
-                    b.draggable = true;
-                    b.innerText = block.label;
-                    b.style.backgroundColor = cat.color;
-                    b.dataset.type = block.id;
-                    b.ondragstart = drag;
-                    toolbox.appendChild(b);
-                });
-            });
-        }
-
-        // Run on load
-        window.onload = initEditor;
-    </script>
+    <xml id="toolbox" style="display: none">
+        <category name="Events" colour="#FFBF00">
+            <block type="event_whenflagclicked"></block>
+            <block type="event_whenbroadcastreceived"><field name="MESSAGE">message1</field></block>
+            <block type="event_broadcast"><value name="MESSAGE"><shadow type="text"><field name="TEXT">message1</field></shadow></value></block>
+        </category>
+        <category name="Motion" colour="#4C97FF">
+            <block type="motion_move"><value name="STEPS"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="motion_turn"><field name="DIRECTION">RIGHT</field><value name="DEGREES"><shadow type="math_number"><field name="NUM">15</field></shadow></value></block>
+            <block type="motion_goto_xy"><value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value><value name="Y"><shadow type="math_number"><field name="NUM">0</field></shadow></value></block>
+        </category>
+        <category name="Looks" colour="#9966FF">
+            <block type="looks_say"><value name="MESSAGE"><shadow type="text"><field name="TEXT">Hello!</field></shadow></value></block>
+            <block type="looks_switchcostume"><value name="COSTUME"><shadow type="text"><field name="TEXT">star</field></shadow></value></block>
+        </category>
+        <category name="Control" colour="#FFAB19">
+            <block type="control_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">1</field></shadow></value></block>
+            <block type="control_forever"></block>
+            <block type="controls_repeat_ext"><value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
+            <block type="controls_if"></block>
+        </category>
+        <category name="Variables" colour="#FF8C1A" custom="VARIABLE"></category>
+        </xml>
 </body>
 </html>
