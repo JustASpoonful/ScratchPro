@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Scratch Pro</title>
     <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-    <script src="https://unpkg.com/blockly/javascript_compressed"></script>
+    <script src="https://unpkg.com/blockly/javascript_generator.min.js"></script>
     <script src="https://unpkg.com/blockly/msg/en"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -294,7 +294,7 @@
         .blocklyTreeLabel { font-family: var(--font-main) !important; font-weight: 600 !important; font-size: 13px !important; color: var(--text-secondary) !important; }
         .blocklyTreeRow.blocklyTreeSelected .blocklyTreeLabel { color: var(--text-primary) !important; }
         
-        /* HIDE TOOLBOX SCROLLBAR (Request Implementation) */
+        /* HIDE TOOLBOX SCROLLBAR */
         .blocklyToolboxDiv .blocklyScrollbarHorizontal,
         .blocklyToolboxDiv .blocklyScrollbarVertical {
             display: none !important;
@@ -356,6 +356,12 @@
             <button id="openModBtn" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 px-3 py-2 rounded-lg transition-all border border-indigo-500/20">
                 <i class="fas fa-code"></i>
             </button>
+            <button id="saveBtn" class="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-3 py-2 rounded-lg transition-all border border-emerald-500/20" title="Save Project">
+                <i class="fas fa-save"></i>
+            </button>
+            <button id="loadBtn" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 px-3 py-2 rounded-lg transition-all border border-amber-500/20" title="Load Project">
+                <i class="fas fa-folder-open"></i>
+            </button>
         </div>
     </header>
 
@@ -376,6 +382,12 @@
                     <div class="flex-1"></div>
                     <button id="addSpriteBtn" class="btn-action btn-ghost">
                         <i class="fas fa-plus"></i> New Sprite
+                    </button>
+                    <button id="undoBtn" class="btn-action btn-ghost" title="Undo">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    <button id="redoBtn" class="btn-action btn-ghost" title="Redo">
+                        <i class="fas fa-redo"></i>
                     </button>
                 </div>
 
@@ -407,7 +419,7 @@
         </div>
     </div>
 
-    <!-- Inject Mod Panel -->
+    <!-- Mod Panel -->
     <div id="modPanel" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[200] hidden items-center justify-center p-6">
         <div class="bg-slate-900 rounded-3xl w-full max-w-xl border border-white/10 shadow-2xl overflow-hidden">
             <div class="p-8 border-b border-white/5 flex justify-between items-center bg-white/2">
@@ -419,7 +431,13 @@
             </div>
             <div class="p-8 space-y-6">
                 <textarea id="modInput" class="w-full h-64 bg-black/40 p-5 rounded-2xl border border-white/10 font-mono text-sm text-indigo-300 focus:outline-none focus:border-indigo-500/50 transition-all resize-none" placeholder="// Input runtime JS code here..."></textarea>
-                <button id="loadModBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-600/20 active:scale-95">Inject to Kernel</button>
+                <div class="flex gap-3">
+                    <button id="loadModBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-600/20 active:scale-95">Inject to Kernel</button>
+                    <button id="clearModBtn" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-4 rounded-2xl font-bold transition-all">Clear</button>
+                </div>
+                <div class="text-xs text-slate-400 font-mono">
+                    <i class="fas fa-info-circle mr-2"></i> Safe mode: No direct eval, limited scope
+                </div>
             </div>
         </div>
     </div>
@@ -471,35 +489,46 @@
     </xml>
 
     <script>
-        const state = {
-            entities: [],
-            stageEntity: null,
-            activeEntityId: null,
-            stage: { w: 380, h: 285 },
-            isRunning: false,
-            abortController: null, 
-            backdrops: {
-                'Void': '#000000',
-                'Deep Space': 'linear-gradient(45deg, #020617 0%, #1e1b4b 100%)',
-                'Neon Grid': 'linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px), #020617',
-                'Sunset': 'linear-gradient(180deg, #f97316 0%, #7c3aed 100%)',
-                'Matrix': 'linear-gradient(rgba(16, 185, 129, 0.05) 2px, transparent 2px), linear-gradient(90deg, rgba(16, 185, 129, 0.05) 2px, transparent 2px), #000'
-            },
-            currentBackdrop: 'Deep Space',
-            costumes: { 'star': 'M50 15 L58 42 L85 42 L63 58 L71 85 L50 68 L29 85 L37 58 L15 42 L42 42 Z' },
+        class ProjectState {
+            constructor() {
+                this.entities = [];
+                this.stageEntity = null;
+                this.activeEntityId = null;
+                this.stage = { w: 380, h: 285 };
+                this.isRunning = false;
+                this.abortController = null;
+                this.backdrops = {
+                    'Void': '#000000',
+                    'Deep Space': 'linear-gradient(45deg, #020617 0%, #1e1b4b 100%)',
+                    'Neon Grid': 'linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px), #020617',
+                    'Sunset': 'linear-gradient(180deg, #f97316 0%, #7c3aed 100%)',
+                    'Matrix': 'linear-gradient(rgba(16, 185, 129, 0.05) 2px, transparent 2px), linear-gradient(90deg, rgba(16, 185, 129, 0.05) 2px, transparent 2px), #000'
+                };
+                this.currentBackdrop = 'Deep Space';
+                this.costumes = { 
+                    'star': 'M50 15 L58 42 L85 42 L63 58 L71 85 L50 68 L29 85 L37 58 L15 42 L42 42 Z',
+                    'cat': 'M50 20 L60 35 L75 40 L65 50 L70 65 L50 55 L30 65 L35 50 L25 40 L40 35 Z',
+                    'robot': 'M30 20 L70 20 L75 40 L70 60 L30 60 L25 40 Z M40 25 L45 35 M55 25 L60 35 M45 50 L55 50'
+                };
+                this.updateUITimeout = null;
+                this.projectName = 'Untitled';
+            }
             
             init() {
                 this.stageEntity = {
                     id: 'STAGE',
                     name: 'Stage',
                     isStage: true,
-                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>'
+                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>',
+                    vars: {}
                 };
                 
                 this.renderStageThumb();
                 this.createSprite('Sprite1');
-                this.setActive('s_0'); 
-            },
+                this.setActive('s_0');
+                this.loadFromStorage();
+                logToConsole('System: State initialized');
+            }
             
             createSprite(name = null) {
                 const id = `s_${this.entities.length}`;
@@ -512,134 +541,264 @@
                     costume: 'star', 
                     dom: null,
                     isStage: false,
-                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>' 
+                    xml: '<xml xmlns="https://developers.google.com/blockly/xml"></xml>',
+                    vars: {}
                 };
                 this.entities.push(entity);
                 this.renderSprite(entity);
                 this.setActive(id);
                 logToConsole(`Kernel: Created sprite <${entity.name}>`);
+                this.saveToStorage();
                 return entity;
-            },
+            }
             
             renderSprite(entity) {
                 const div = document.createElement('div');
                 div.className = 'sprite-entity';
                 div.style.width = '44px';
                 div.style.height = '44px';
-                div.innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full"><path d="${this.costumes[entity.costume]}" fill="var(--accent)" stroke="rgba(255,255,255,0.4)" stroke-width="3"/></svg>`;
-                div.onclick = (e) => { e.stopPropagation(); this.setActive(entity.id); };
+                div.innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full"><path d="${this.costumes[entity.costume] || this.costumes.star}" fill="var(--accent)" stroke="rgba(255,255,255,0.4)" stroke-width="3"/></svg>`;
+                div.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    this.setActive(entity.id); 
+                };
                 
                 let isDragging = false;
+                let startX = 0, startY = 0;
+                
+                const onMouseMove = (ev) => {
+                    if (!isDragging) return;
+                    const rect = document.getElementById('stage').getBoundingClientRect();
+                    entity.x = Math.max(0, Math.min(this.stage.w, ev.clientX - rect.left));
+                    entity.y = Math.max(0, Math.min(this.stage.h, ev.clientY - rect.top));
+                    this.updateUI();
+                };
+                
+                const onMouseUp = () => {
+                    isDragging = false;
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    div.style.cursor = 'grab';
+                    this.saveToStorage();
+                };
+                
                 div.onmousedown = (e) => { 
+                    e.stopPropagation();
                     isDragging = true; 
                     this.setActive(entity.id);
-                    document.onmousemove = (ev) => {
-                        if(!isDragging) return;
-                        const rect = document.getElementById('stage').getBoundingClientRect();
-                        entity.x = Math.max(0, Math.min(this.stage.w, ev.clientX - rect.left));
-                        entity.y = Math.max(0, Math.min(this.stage.h, ev.clientY - rect.top));
-                        this.updateUI();
-                    };
-                    document.onmouseup = () => isDragging = false;
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                    div.style.cursor = 'grabbing';
                 };
 
                 document.getElementById('stage').appendChild(div);
                 entity.dom = div;
-            },
+            }
             
             renderStageThumb() {
                 const container = document.getElementById('stage-thumb-container');
-                if(!container) return;
+                if (!container) return;
                 container.innerHTML = `
                     <div id="thumb-STAGE" class="sprite-thumb w-full flex-1" onclick="state.setActive('STAGE')">
                         <i class="fas fa-globe text-xl opacity-60"></i>
                         <span>Stage</span>
                     </div>
                 `;
-            },
+            }
 
             setActive(id) {
                 const old = this.getActiveEntity();
-                if(old && typeof workspace !== 'undefined' && workspace) {
+                if (old && typeof workspace !== 'undefined' && workspace) {
                     old.xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
                 }
                 
                 this.activeEntityId = id; 
                 const current = this.getActiveEntity();
                 
-                if(current && typeof workspace !== 'undefined' && workspace) {
+                if (current && typeof workspace !== 'undefined' && workspace) {
                     workspace.clear();
                     try {
                         const dom = Blockly.utils.xml.textToDom(current.xml);
                         Blockly.Xml.domToWorkspace(dom, workspace);
-                    } catch(e) { console.error(e); }
+                    } catch(e) { 
+                        console.error('Error loading workspace:', e);
+                        logToConsole(`Error loading ${current.name}: ${e.message}`);
+                    }
                 }
-                this.updateUI(); 
-            },
+                this.updateUI();
+            }
             
             getActiveEntity() { 
-                if(this.activeEntityId === 'STAGE') return this.stageEntity;
+                if (this.activeEntityId === 'STAGE') return this.stageEntity;
                 return this.entities.find(e => e.id === this.activeEntityId); 
-            },
+            }
             
             updateUI() {
-                const stageDiv = document.getElementById('stage-backdrop');
-                if(stageDiv) {
-                    const val = this.backdrops[this.currentBackdrop];
-                    stageDiv.style.background = val;
-                    if(val.includes('grid') || val.includes('Matrix')) stageDiv.style.backgroundSize = '30px 30px';
-                }
-
-                this.entities.forEach(e => {
-                    if (e.dom) {
-                        e.dom.style.left = `${e.x - 22}px`; 
-                        e.dom.style.top = `${e.y - 22}px`;
-                        e.dom.style.transform = `rotate(${e.direction - 90}deg)`;
-                        e.dom.classList.toggle('active', e.id === this.activeEntityId);
+                if (this.updateUITimeout) clearTimeout(this.updateUITimeout);
+                this.updateUITimeout = setTimeout(() => {
+                    const stageDiv = document.getElementById('stage-backdrop');
+                    if (stageDiv) {
+                        const val = this.backdrops[this.currentBackdrop];
+                        stageDiv.style.background = val;
+                        if (val.includes('grid') || val.includes('Matrix')) {
+                            stageDiv.style.backgroundSize = '30px 30px';
+                        }
                     }
-                });
 
-                const list = document.getElementById('sprite-list');
-                if(list) {
-                    list.innerHTML = '';
                     this.entities.forEach(e => {
-                        const thumb = document.createElement('div');
-                        thumb.className = `sprite-thumb ${e.id === this.activeEntityId ? 'active' : ''}`;
-                        thumb.innerHTML = `<svg class="w-8 h-8" viewBox="0 0 100 100"><path d="${this.costumes[e.costume]}" fill="var(--accent)"/></svg><span title="${e.name}">${e.name}</span>`;
-                        thumb.onclick = () => this.setActive(e.id);
-                        list.appendChild(thumb);
+                        if (e.dom) {
+                            e.dom.style.left = `${e.x - 22}px`;
+                            e.dom.style.top = `${e.y - 22}px`;
+                            e.dom.style.transform = `rotate(${e.direction - 90}deg)`;
+                            e.dom.classList.toggle('active', e.id === this.activeEntityId);
+                        }
                     });
-                }
 
-                const stageThumb = document.getElementById('thumb-STAGE');
-                if(stageThumb) stageThumb.className = `sprite-thumb w-full flex-1 ${this.activeEntityId === 'STAGE' ? 'active' : ''}`;
-                
-                const nameLabel = document.getElementById('active-name');
-                if(nameLabel) nameLabel.innerText = this.getActiveEntity()?.name || 'Null';
-            },
+                    const list = document.getElementById('sprite-list');
+                    if (list) {
+                        list.innerHTML = '';
+                        this.entities.forEach(e => {
+                            const thumb = document.createElement('div');
+                            thumb.className = `sprite-thumb ${e.id === this.activeEntityId ? 'active' : ''}`;
+                            thumb.innerHTML = `<svg class="w-8 h-8" viewBox="0 0 100 100"><path d="${this.costumes[e.costume] || this.costumes.star}" fill="var(--accent)"/></svg><span title="${e.name}">${e.name}</span>`;
+                            thumb.onclick = () => this.setActive(e.id);
+                            list.appendChild(thumb);
+                        });
+                    }
+
+                    const stageThumb = document.getElementById('thumb-STAGE');
+                    if (stageThumb) {
+                        stageThumb.className = `sprite-thumb w-full flex-1 ${this.activeEntityId === 'STAGE' ? 'active' : ''}`;
+                    }
+                    
+                    const nameLabel = document.getElementById('active-name');
+                    if (nameLabel) {
+                        nameLabel.innerText = this.getActiveEntity()?.name || 'Null';
+                    }
+                }, 16);
+            }
 
             async broadcast(msg) {
                 logToConsole(`Broadcast message: "${msg}"`);
                 const targets = [...this.entities, this.stageEntity];
-                targets.forEach(entity => {
+                
+                for (const entity of targets) {
                     const tempWs = new Blockly.Workspace();
                     try {
                         Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(entity.xml), tempWs);
                         const blocks = tempWs.getBlocksByType('event_whenbroadcastreceived');
-                        blocks.forEach(block => {
+                        
+                        for (const block of blocks) {
                             if (block.getFieldValue('MESSAGE') === msg) {
                                 const next = block.getNextBlock();
-                                if(next) {
+                                if (next) {
                                     const code = gen.blockToCode(next);
-                                    const fn = new Function('state', 'self', 'moveSprite', 'sleep', 'logToConsole', `(async()=>{ ${code} })()`);
+                                    const fn = new Function('state', 'self', 'moveSprite', 'sleep', 'logToConsole', `(async()=>{ 
+                                        try { ${code} } 
+                                        catch(e){ 
+                                            if(e.message !== 'ABORTED') 
+                                                logToConsole("Runtime Error: " + e.message); 
+                                        } 
+                                    })()`);
                                     fn(this, entity, moveSprite, sleep, logToConsole);
                                 }
                             }
-                        });
-                    } finally { tempWs.dispose(); }
-                });
+                        }
+                    } finally { 
+                        tempWs.dispose(); 
+                    }
+                }
             }
-        };
+            
+            saveToStorage() {
+                try {
+                    const data = {
+                        entities: this.entities.map(e => ({
+                            ...e,
+                            dom: null // Don't save DOM reference
+                        })),
+                        stageEntity: this.stageEntity,
+                        activeEntityId: this.activeEntityId,
+                        currentBackdrop: this.currentBackdrop
+                    };
+                    localStorage.setItem('scratchProProject', JSON.stringify(data));
+                    logToConsole('System: Project saved to browser storage');
+                } catch (e) {
+                    console.error('Save error:', e);
+                }
+            }
+            
+            loadFromStorage() {
+                try {
+                    const saved = localStorage.getItem('scratchProProject');
+                    if (!saved) return;
+                    
+                    const data = JSON.parse(saved);
+                    this.entities = data.entities || [];
+                    this.stageEntity = data.stageEntity || this.stageEntity;
+                    this.activeEntityId = data.activeEntityId || this.activeEntityId;
+                    this.currentBackdrop = data.currentBackdrop || this.currentBackdrop;
+                    
+                    // Re-render sprites
+                    setTimeout(() => {
+                        this.entities.forEach(e => this.renderSprite(e));
+                        this.updateUI();
+                        logToConsole('System: Project loaded from storage');
+                    }, 100);
+                } catch (e) {
+                    console.error('Load error:', e);
+                }
+            }
+            
+            exportProject() {
+                const data = {
+                    name: this.projectName,
+                    entities: this.entities.map(e => ({
+                        ...e,
+                        dom: null,
+                        xml: e.xml
+                    })),
+                    stageEntity: this.stageEntity,
+                    backdrop: this.currentBackdrop,
+                    version: '1.0'
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${this.projectName}.scratchpro`;
+                a.click();
+                URL.revokeObjectURL(url);
+                logToConsole(`System: Project exported as ${this.projectName}.scratchpro`);
+            }
+            
+            importProject(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.entities = data.entities || [];
+                        this.stageEntity = data.stageEntity || this.stageEntity;
+                        this.currentBackdrop = data.backdrop || this.currentBackdrop;
+                        this.projectName = data.name || 'Imported';
+                        
+                        // Clear and re-render
+                        document.getElementById('stage').innerHTML = '<div id="stage-backdrop"></div>';
+                        this.entities.forEach(e => this.renderSprite(e));
+                        this.setActive(this.entities[0]?.id || 'STAGE');
+                        this.updateUI();
+                        logToConsole(`System: Project "${this.projectName}" imported`);
+                    } catch (err) {
+                        logToConsole(`Import Error: ${err.message}`);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // Initialize state
+        const state = new ProjectState();
 
         function setTheme(theme) {
             document.body.className = `theme-${theme}`;
@@ -648,76 +807,289 @@
             logToConsole(`System: Active theme set to <${theme}>`);
         }
 
-        Blockly.Blocks['event_whenflagclicked'] = { init: function() { this.appendDummyInput().appendField("when").appendField(new Blockly.FieldImage("https://scratch.mit.edu/static/assets/40432658145e7f1e63a129d5926ec25d.svg", 16, 16, "green flag")).appendField("clicked"); this.setNextStatement(true); this.setColour("#FFBF00"); this.hat='cap'; } };
-        Blockly.Blocks['event_whenbroadcastreceived'] = { init: function() { this.appendDummyInput().appendField("when I receive").appendField(new Blockly.FieldTextInput("message1"), "MESSAGE"); this.setNextStatement(true); this.setColour("#FFBF00"); this.hat='cap'; } };
-        Blockly.Blocks['event_broadcast'] = { init: function() { this.appendValueInput("MESSAGE").setCheck("String").appendField("broadcast"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFBF00"); } };
-        Blockly.Blocks['event_broadcastandwait'] = { init: function() { this.appendValueInput("MESSAGE").setCheck("String").appendField("broadcast").appendField("and wait"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFBF00"); } };
+        // Block Definitions
+        Blockly.Blocks['event_whenflagclicked'] = { 
+            init: function() { 
+                this.appendDummyInput()
+                    .appendField("when")
+                    .appendField(new Blockly.FieldImage("https://scratch.mit.edu/static/assets/40432658145e7f1e63a129d5926ec25d.svg", 16, 16, "green flag"))
+                    .appendField("clicked"); 
+                this.setNextStatement(true); 
+                this.setColour("#FFBF00"); 
+                this.hat='cap'; 
+            } 
+        };
         
-        Blockly.Blocks['motion_move'] = { init: function() { this.appendValueInput("STEPS").setCheck("Number").appendField("move"); this.appendDummyInput().appendField("steps"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
-        Blockly.Blocks['motion_turn'] = { init: function() { 
-            const dir = this.appendDummyInput();
-            if(this.getFieldValue('DIRECTION') === 'RIGHT') dir.appendField("turn ↻"); else dir.appendField("turn ↺");
-            this.appendValueInput("DEGREES").setCheck("Number");
-            this.appendDummyInput().appendField("degrees");
-            this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); 
-        }, mutationToDom: function() { const container = document.createElement('mutation'); container.setAttribute('direction', this.getFieldValue('DIRECTION')); return container; }, domToMutation: function(xmlElement) { this.setFieldValue(xmlElement.getAttribute('direction'), 'DIRECTION'); } };
-        Blockly.Blocks['motion_goto_xy'] = { init: function() { this.appendDummyInput().appendField("go to x:"); this.appendValueInput("X").setCheck("Number"); this.appendDummyInput().appendField("y:"); this.appendValueInput("Y").setCheck("Number"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
-        Blockly.Blocks['motion_glideto_xy'] = { init: function() { this.appendDummyInput().appendField("glide"); this.appendValueInput("SECS").setCheck("Number"); this.appendDummyInput().appendField("secs to x:"); this.appendValueInput("X").setCheck("Number"); this.appendDummyInput().appendField("y:"); this.appendValueInput("Y").setCheck("Number"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#4C97FF"); } };
+        Blockly.Blocks['event_whenbroadcastreceived'] = { 
+            init: function() { 
+                this.appendDummyInput()
+                    .appendField("when I receive")
+                    .appendField(new Blockly.FieldTextInput("message1"), "MESSAGE"); 
+                this.setNextStatement(true); 
+                this.setColour("#FFBF00"); 
+                this.hat='cap'; 
+            } 
+        };
+        
+        Blockly.Blocks['event_broadcast'] = { 
+            init: function() { 
+                this.appendValueInput("MESSAGE")
+                    .setCheck("String")
+                    .appendField("broadcast"); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#FFBF00"); 
+            } 
+        };
+        
+        Blockly.Blocks['event_broadcastandwait'] = { 
+            init: function() { 
+                this.appendValueInput("MESSAGE")
+                    .setCheck("String")
+                    .appendField("broadcast")
+                    .appendField("and wait"); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#FFBF00"); 
+            } 
+        };
+        
+        Blockly.Blocks['motion_move'] = { 
+            init: function() { 
+                this.appendValueInput("STEPS")
+                    .setCheck("Number")
+                    .appendField("move"); 
+                this.appendDummyInput()
+                    .appendField("steps"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#4C97FF"); 
+            } 
+        };
+        
+Blockly.Blocks['motion_turn'] = { 
+    init: function() { 
+        // Create the field FIRST before trying to read it
+        this.appendDummyInput()
+            .appendField(new Blockly.FieldDropdown([
+                ["↻ turn right", "RIGHT"],
+                ["↺ turn left", "LEFT"]
+            ], this.validate_), "DIRECTION");  // Add field FIRST
+        
+        this.appendValueInput("DEGREES").setCheck("Number");
+        this.appendDummyInput().appendField("degrees");
+        this.setInputsInline(true); 
+        this.setPreviousStatement(true); 
+        this.setNextStatement(true); 
+        this.setColour("#4C97FF");
+    },
+    validate_: function(newValue) {
+        return newValue;
+    }
+};
+        
+        Blockly.Blocks['motion_goto_xy'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("go to x:"); 
+                this.appendValueInput("X").setCheck("Number"); 
+                this.appendDummyInput().appendField("y:"); 
+                this.appendValueInput("Y").setCheck("Number"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#4C97FF"); 
+            } 
+        };
+        
+        Blockly.Blocks['motion_glideto_xy'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("glide"); 
+                this.appendValueInput("SECS").setCheck("Number"); 
+                this.appendDummyInput().appendField("secs to x:"); 
+                this.appendValueInput("X").setCheck("Number"); 
+                this.appendDummyInput().appendField("y:"); 
+                this.appendValueInput("Y").setCheck("Number"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#4C97FF"); 
+            } 
+        };
 
-        Blockly.Blocks['looks_say'] = { init: function() { this.appendDummyInput().appendField("say"); this.appendValueInput("MESSAGE").setCheck(null); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
-        Blockly.Blocks['looks_sayforsecs'] = { init: function() { this.appendDummyInput().appendField("say"); this.appendValueInput("MESSAGE").setCheck(null); this.appendDummyInput().appendField("for"); this.appendValueInput("SECS").setCheck("Number"); this.appendDummyInput().appendField("seconds"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
-        Blockly.Blocks['looks_switchcostume'] = { init: function() { this.appendDummyInput().appendField("switch costume to"); this.appendValueInput("COSTUME").setCheck("String"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#9966FF"); } };
+        Blockly.Blocks['looks_say'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("say"); 
+                this.appendValueInput("MESSAGE").setCheck(null); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#9966FF"); 
+            } 
+        };
+        
+        Blockly.Blocks['looks_sayforsecs'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("say"); 
+                this.appendValueInput("MESSAGE").setCheck(null); 
+                this.appendDummyInput().appendField("for"); 
+                this.appendValueInput("SECS").setCheck("Number"); 
+                this.appendDummyInput().appendField("seconds"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#9966FF"); 
+            } 
+        };
+        
+        Blockly.Blocks['looks_switchcostume'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("switch costume to"); 
+                this.appendValueInput("COSTUME").setCheck("String"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#9966FF"); 
+            } 
+        };
 
-        Blockly.Blocks['control_wait'] = { init: function() { this.appendDummyInput().appendField("wait"); this.appendValueInput("DURATION").setCheck("Number"); this.appendDummyInput().appendField("seconds"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#FFAB19"); } };
-        Blockly.Blocks['control_forever'] = { init: function() { this.appendDummyInput().appendField("forever"); this.appendStatementInput("DO"); this.setPreviousStatement(true); this.setNextStatement(false); this.setColour("#FFAB19"); } };
+        Blockly.Blocks['control_wait'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("wait"); 
+                this.appendValueInput("DURATION").setCheck("Number"); 
+                this.appendDummyInput().appendField("seconds"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#FFAB19"); 
+            } 
+        };
+        
+        Blockly.Blocks['control_forever'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("forever"); 
+                this.appendStatementInput("DO"); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(false); 
+                this.setColour("#FFAB19"); 
+            } 
+        };
 
-        Blockly.Blocks['stage_switchbackdrop'] = { init: function() { this.appendDummyInput().appendField("switch backdrop to"); this.appendValueInput("BACKDROP").setCheck("String"); this.setInputsInline(true); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#059669"); }};
-        Blockly.Blocks['stage_nextbackdrop'] = { init: function() { this.appendDummyInput().appendField("next backdrop"); this.setPreviousStatement(true); this.setNextStatement(true); this.setColour("#059669"); }};
+        Blockly.Blocks['stage_switchbackdrop'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("switch backdrop to"); 
+                this.appendValueInput("BACKDROP").setCheck("String"); 
+                this.setInputsInline(true); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#059669"); 
+            }
+        };
+        
+        Blockly.Blocks['stage_nextbackdrop'] = { 
+            init: function() { 
+                this.appendDummyInput().appendField("next backdrop"); 
+                this.setPreviousStatement(true); 
+                this.setNextStatement(true); 
+                this.setColour("#059669"); 
+            } 
+        };
 
+        // Variable Blocks
+        Blockly.Blocks['variables_set'] = {
+            init: function() {
+                this.appendValueInput("VALUE")
+                    .appendField("set")
+                    .appendField(new Blockly.FieldVariable("item"), "VAR")
+                    .appendField("to");
+                this.setPreviousStatement(true);
+                this.setNextStatement(true);
+                this.setColour("#FF8C1A");
+            }
+        };
+
+        Blockly.Blocks['variables_get'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField(new Blockly.FieldVariable("item"), "VAR");
+                this.setOutput(true);
+                this.setColour("#FF8C1A");
+            }
+        };
+
+        // JavaScript Generator
         const gen = javascript.javascriptGenerator;
+        
         gen.forBlock['event_whenflagclicked'] = () => "";
         gen.forBlock['event_whenbroadcastreceived'] = () => "";
         gen.forBlock['event_broadcast'] = (b) => `await state.broadcast(${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)});\n`;
         gen.forBlock['event_broadcastandwait'] = (b) => `await state.broadcast(${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)});\n`;
+        
         gen.forBlock['motion_move'] = (b) => `if(!self.isStage) await moveSprite(self, ${gen.valueToCode(b,'STEPS',javascript.Order.ATOMIC)||0});\n`;
-        gen.forBlock['motion_turn'] = (b) => {
-            const deg = gen.valueToCode(b,'DEGREES',javascript.Order.ATOMIC)||0;
-            const dir = b.getFieldValue('DIRECTION') === 'RIGHT' ? deg : `-${deg}`;
-            return `if(!self.isStage) { self.direction += ${dir}; state.updateUI(); await sleep(30); }\n`;
-        };
+gen.forBlock['motion_turn'] = (b) => {
+    // Get the field value from the block
+    const field = b.getField('DIRECTION');
+    const direction = field ? field.getValue() : 'RIGHT';
+    const deg = gen.valueToCode(b,'DEGREES',javascript.Order.ATOMIC)||0;
+    const turnAmount = direction === 'RIGHT' ? deg : `-${deg}`;
+    return `if(!self.isStage) { self.direction += ${turnAmount}; state.updateUI(); await sleep(30); }\n`;
+};
         gen.forBlock['motion_goto_xy'] = (b) => `if(!self.isStage) { self.x = ${gen.valueToCode(b,'X',javascript.Order.ATOMIC)} + state.stage.w/2; self.y = state.stage.h/2 - ${gen.valueToCode(b,'Y',javascript.Order.ATOMIC)}; state.updateUI(); await sleep(30); }\n`;
         gen.forBlock['motion_glideto_xy'] = (b) => `if(!self.isStage) { self.x = ${gen.valueToCode(b,'X',javascript.Order.ATOMIC)} + state.stage.w/2; self.y = state.stage.h/2 - ${gen.valueToCode(b,'Y',javascript.Order.ATOMIC)}; state.updateUI(); await sleep(${gen.valueToCode(b,'SECS',javascript.Order.ATOMIC)*1000}); }\n`;
+        
         gen.forBlock['control_wait'] = (b) => `await sleep(${gen.valueToCode(b,'DURATION',javascript.Order.ATOMIC)*1000});\n`;
         gen.forBlock['control_forever'] = (b) => `while(true) {\n${gen.statementToCode(b,'DO')} await sleep(10);\n}\n`;
+        
         gen.forBlock['looks_say'] = (b) => `logToConsole("[" + self.name + "] " + ${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)}); await sleep(100);\n`;
         gen.forBlock['looks_sayforsecs'] = (b) => `logToConsole("[" + self.name + "] " + ${gen.valueToCode(b,'MESSAGE',javascript.Order.ATOMIC)}); await sleep(${gen.valueToCode(b,'SECS',javascript.Order.ATOMIC)*1000});\n`;
-        gen.forBlock['looks_switchcostume'] = () => `state.updateUI();\n`;
+        gen.forBlock['looks_switchcostume'] = (b) => {
+            const costume = gen.valueToCode(b, 'COSTUME', javascript.Order.ATOMIC);
+            return `if(state.costumes[${costume}]) { self.costume = ${costume}; state.updateUI(); } else { logToConsole("Costume not found: " + ${costume}); }\n`;
+        };
+        
         gen.forBlock['stage_switchbackdrop'] = (b) => {
             const val = gen.valueToCode(b,'BACKDROP',javascript.Order.ATOMIC);
-            return `if(state.backdrops[${val}]) { state.currentBackdrop = ${val}; state.updateUI(); await sleep(30); }\n`;
+            return `if(state.backdrops[${val}]) { state.currentBackdrop = ${val}; state.updateUI(); await sleep(30); } else { logToConsole("Backdrop not found: " + ${val}); }\n`;
         };
         gen.forBlock['stage_nextbackdrop'] = () => {
             return `const keys = Object.keys(state.backdrops); let idx = keys.indexOf(state.currentBackdrop); state.currentBackdrop = keys[(idx+1)%keys.length]; state.updateUI(); await sleep(30);\n`;
         };
+        
         gen.forBlock['controls_repeat_ext'] = (block) => {
             const repeats = gen.valueToCode(block, 'TIMES', javascript.Order.ASSIGNMENT) || '0';
             const branch = gen.statementToCode(block, 'DO');
             return `for (let i = 0; i < ${repeats}; i++) {\n${branch}  await sleep(10);\n}\n`;
         };
+        
         gen.forBlock['controls_if'] = (block) => {
             const cond = gen.valueToCode(block, 'IF0', javascript.Order.NONE) || 'false';
             const branch = gen.statementToCode(block, 'DO0');
             return `if (${cond}) {\n${branch}}\n`;
         };
+        
+        gen.forBlock['variables_set'] = function(block) {
+            const varName = block.getFieldValue('VAR');
+            const value = gen.valueToCode(block, 'VALUE', javascript.Order.ASSIGNMENT);
+            return `self.vars = self.vars || {}; self.vars['${varName}'] = ${value};\n`;
+        };
+        
+        gen.forBlock['variables_get'] = function(block) {
+            const varName = block.getFieldValue('VAR');
+            return [`self.vars ? self.vars['${varName}'] : 0`, javascript.Order.ATOMIC];
+        };
 
+        // Initialize Blockly Workspace
         const workspace = Blockly.inject('blocklyDiv', {
             toolbox: document.getElementById('toolbox'),
             theme: Blockly.Themes.Modern,
             renderer: 'zelos',
             zoom: { controls: true, startScale: 0.8 },
-            grid: { spacing: 25, length: 2, colour: 'rgba(255,255,255,0.05)', snap: true }
+            grid: { spacing: 25, length: 2, colour: 'rgba(255,255,255,0.05)', snap: true },
+            move: { scrollbars: true, drag: true, wheel: true },
+            trashcan: true
         });
 
+        // Utility Functions
         const logToConsole = (msg) => {
             const c = document.getElementById('console');
             const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
@@ -735,10 +1107,13 @@
 
         async function moveSprite(entity, steps) { 
             const r = (entity.direction - 90) * (Math.PI / 180); 
-            entity.x += Math.cos(r) * steps; entity.y += Math.sin(r) * steps; 
-            state.updateUI(); await sleep(30);
+            entity.x += Math.cos(r) * steps; 
+            entity.y += Math.sin(r) * steps; 
+            state.updateUI(); 
+            await sleep(30);
         }
 
+        // Event Handlers
         document.getElementById('runBtn').onclick = async () => {
             if (state.abortController) state.abortController.abort();
             state.abortController = new AbortController();
@@ -759,13 +1134,15 @@
                                 try { 
                                     ${code} 
                                 } catch(e){ 
-                                    if(e.message !== 'ABORTED') logToConsole("Runtime Error: " + e.message); 
+                                    if(e.message !== 'ABORTED') logToConsole("Runtime Error in " + self.name + ": " + e.message); 
                                 } 
                             })()`);
                             fn(state, entity, moveSprite, sleep, logToConsole);
                         }
                     });
-                } finally { tempWs.dispose(); }
+                } finally { 
+                    tempWs.dispose(); 
+                }
             });
         };
 
@@ -773,7 +1150,7 @@
             if (state.abortController) {
                 state.abortController.abort();
                 state.abortController = null;
-                logToConsole("Project: Process killed.");
+                logToConsole("Project: Execution stopped.");
             }
             state.entities.forEach(e => {
                 e.x = state.stage.w / 2;
@@ -784,21 +1161,117 @@
         };
 
         document.getElementById('addSpriteBtn').onclick = () => {
-            const n = prompt("Sprite Name:");
-            if(n) state.createSprite(n.replace(/\s+/g, '_'));
+            const n = prompt("Sprite Name:", `Sprite${state.entities.length + 1}`);
+            if (n) state.createSprite(n.replace(/\s+/g, '_').substring(0, 20));
         };
         
-        document.getElementById('openModBtn').onclick = () => document.getElementById('modPanel').style.display = 'flex';
-        document.getElementById('closeModBtn').onclick = () => document.getElementById('modPanel').style.display = 'none';
+        document.getElementById('undoBtn').onclick = () => {
+            workspace.undo(false);
+            logToConsole("Edit: Undo");
+        };
+        
+        document.getElementById('redoBtn').onclick = () => {
+            workspace.undo(true);
+            logToConsole("Edit: Redo");
+        };
+        
+        document.getElementById('saveBtn').onclick = () => {
+            state.saveToStorage();
+        };
+        
+        document.getElementById('loadBtn').onclick = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.scratchpro,application/json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) state.importProject(file);
+            };
+            input.click();
+        };
+        
+        document.getElementById('openModBtn').onclick = () => {
+            document.getElementById('modPanel').style.display = 'flex';
+        };
+        
+        document.getElementById('closeModBtn').onclick = () => {
+            document.getElementById('modPanel').style.display = 'none';
+        };
+        
+        document.getElementById('clearModBtn').onclick = () => {
+            document.getElementById('modInput').value = '';
+        };
+        
+        // Secure Mod Injection
         document.getElementById('loadModBtn').onclick = () => {
+            const code = document.getElementById('modInput').value.trim();
+            if (!code) return;
+            
             try {
-                eval(document.getElementById('modInput').value);
-                logToConsole("Kernel: JS patch injected.");
-            } catch(e) { logToConsole("Kernel Exception: " + e.message); }
+                // Create a safe execution context
+                const safeContext = {
+                    console: { 
+                        log: (...args) => logToConsole(`MOD: ${args.join(' ')}`),
+                        warn: (...args) => logToConsole(`MOD WARNING: ${args.join(' ')}`),
+                        error: (...args) => logToConsole(`MOD ERROR: ${args.join(' ')}`)
+                    },
+                    state,
+                    Blockly,
+                    workspace,
+                    logToConsole,
+                    sleep,
+                    moveSprite,
+                    gen
+                };
+                
+                // Use Function constructor with limited scope
+                const allowedGlobals = Object.keys(safeContext);
+                const allowedValues = Object.values(safeContext);
+                
+                const fn = new Function(...allowedGlobals, `
+                    "use strict";
+                    try {
+                        ${code}
+                        return { success: true };
+                    } catch (e) {
+                        return { success: false, error: e.message };
+                    }
+                `);
+                
+                const result = fn(...allowedValues);
+                if (result.success) {
+                    logToConsole("Kernel: JS patch injected successfully");
+                } else {
+                    logToConsole(`Kernel Exception: ${result.error}`);
+                }
+            } catch(e) { 
+                logToConsole(`Kernel Security Error: ${e.message}`); 
+            }
         };
 
-        window.onload = () => { state.init(); Blockly.svgResize(workspace); };
+        // Initialize everything
+        window.onload = () => {
+            try {
+                state.init(); 
+                Blockly.svgResize(workspace);
+                logToConsole("System: Scratch Pro v1.1 initialized successfully");
+                logToConsole("Ready to create! Use the green flag to run your project.");
+            } catch (error) {
+                console.error("Initialization error:", error);
+                logToConsole(`Fatal Error: ${error.message}`);
+            }
+        };
+        
         window.addEventListener('resize', () => Blockly.svgResize(workspace));
+        
+        // Auto-save every 30 seconds
+        setInterval(() => {
+            const current = state.getActiveEntity();
+            if (current && workspace) {
+                current.xml = Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+                state.saveToStorage();
+            }
+        }, 30000);
     </script>
 </body>
 </html>
